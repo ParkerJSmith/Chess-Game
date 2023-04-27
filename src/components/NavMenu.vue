@@ -55,6 +55,7 @@ export default defineComponent({
 @media only screen and (min-width: 700px) {
   .hamburger-menu-banner {
     visibility: hidden;
+    height: 0px;
   }
 }
 </style>

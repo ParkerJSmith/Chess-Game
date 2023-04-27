@@ -55,13 +55,15 @@ export default defineComponent({
 .player-info-name {
   margin: 0;
   flex-grow: 1;
+  flex-shrink: 1;
   display: flex;
   flex-direction: row;
+  min-width: 0;
 }
 
 .player-info-image-container {
   max-height: 100%;
-  overflow: hidden;
+  min-width: 50px;
 }
 
 .player-info-image-container > img {
@@ -72,10 +74,16 @@ export default defineComponent({
 .player-name {
   font-size: calc(10px + 0.5vw);
   font-family: 'Roboto', sans-serif;
+  flex-shrink: 1;
+  min-width: 0;
   color: white;
   margin: 0;
   font-weight: 100;
   padding-left: 1.5%;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  word-break: break-all;
 }
 
 .player-rating {
@@ -90,6 +98,7 @@ export default defineComponent({
 .player-info-timer {
   width: 130px;
   min-height: 100%;
+  flex-shrink: 0;
   background-color: #dacadd;
   border-radius: max(4px, 1vh);
   display: flex;
@@ -98,14 +107,14 @@ export default defineComponent({
 }
 
 .timer-time {
-  font-size: calc(14px + 1.2vh);
+  font-size: 32px;
   text-align: center;
   font-family: 'Roboto', sans-serif;
 }
 
 @media only screen and (min-width: 700px) {
   .player-info-container {
-    width: 70vh;
+    max-width: 80vh;
     max-height: max(50px, 6vh);
   }
 

@@ -1,8 +1,19 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import type { CSSProperties } from 'vue'
-import blackPawn from '../../assets/images/black_pawn.png'
 import whitePawn from '../../assets/images/white_pawn.png'
+import whiteKnight from '../../assets/images/white_knight.png'
+import whiteBishop from '../../assets/images/white_bishop.png'
+import whiteRook from '../../assets/images/white_rook.png'
+import whiteKing from '../../assets/images/white_king.png'
+import whiteQueen from '../../assets/images/white_queen.png'
+
+import blackPawn from '../../assets/images/black_pawn.png'
+import blackKnight from '../../assets/images/black_knight.png'
+import blackBishop from '../../assets/images/black_bishop.png'
+import blackRook from '../../assets/images/black_rook.png'
+import blackKing from '../../assets/images/black_king.png'
+import blackQueen from '../../assets/images/black_queen.png'
 
 const absolutePosition: CSSProperties = { position: 'absolute' }
 const userSelectNone: CSSProperties = { userSelect: 'none' }
@@ -123,10 +134,31 @@ export default defineComponent({
       switch (this.piece) {
         case 'whitePawn':
           return whitePawn
+        case 'whiteKnight':
+          return whiteKnight
+        case 'whiteBishop':
+          return whiteBishop
+        case 'whiteRook':
+          return whiteRook
+        case 'whiteKing':
+          return whiteKing
+        case 'whiteQueen':
+          return whiteQueen
+
         case 'blackPawn':
           return blackPawn
+        case 'blackKnight':
+          return blackKnight
+        case 'blackBishop':
+          return blackBishop
+        case 'blackRook':
+          return blackRook
+        case 'blackKing':
+          return blackKing
+        case 'blackQueen':
+          return blackQueen
       }
-      return blackPawn
+      return ''
     },
     getPieceXPos() {
       if (this.dragging) {
