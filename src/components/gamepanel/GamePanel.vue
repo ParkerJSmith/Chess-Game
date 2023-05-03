@@ -1,6 +1,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import { io } from 'socket.io-client'
+import GameChat from './GameChat.vue'
 
 export default defineComponent({
   data() {
@@ -13,22 +14,21 @@ export default defineComponent({
     findGame() {
       this.socket.emit('request-match')
     },
-    testRoom() {
-      this.socket.emit('test-room-event', 'Testing the room :)', this.roomKey)
-    },
     logMessage(message: any) {
       console.log(message)
     }
   },
   created() {
     this.socket.on('room-key-created', (room, playerColor) => {
-        this.roomKey = room
-        this.logMessage('Your assigned color is ' + playerColor)
-        this.$emit('room-joined', this.socket, this.roomKey, playerColor)
+      this.roomKey = room
+      this.$emit('room-joined', this.socket, this.roomKey, playerColor)
     })
     this.socket.on('server-response', (message) => {
       this.logMessage(message)
     })
+  },
+  components: {
+    GameChat
   }
 })
 </script>
@@ -36,7 +36,7 @@ export default defineComponent({
 <template>
   <div class="game-panel-container">
     <button @click="findGame">Find Game</button>
-    <button @click="testRoom">Test the roomkey!</button>
+    <GameChat :socket="socket" :roomKey="roomKey" />
   </div>
 </template>
 
@@ -47,14 +47,36 @@ export default defineComponent({
   margin-left: 10px;
   margin-right: 10px;
   background-color: black;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-@media only screen and (min-width: 950px) {
+.game-panel-container > button {
+  border: none;
+  outline: none;
+  width: 90%;
+  height: 80px;
+  border-radius: 10px;
+}
+
+.game-panel-container > button:hover {
+  cursor: pointer;
+}
+
+.game-panel-container > button:active {
+  background-color: orange;
+}
+
+@media only screen and (min-width: 1350px) {
   .game-panel-container {
-    margin-top: 5vh;
-    width: 200px;
-    height: 70vh;
+    margin-top: 1vh;
+    width: 500px;
+    height: calc(90vh - max(55px, 6.5vh) - 32px);
+    max-height: 80vh;
     background-color: black;
+    border-radius: 10px;
+    margin-left: 20px;
   }
 }
 </style>

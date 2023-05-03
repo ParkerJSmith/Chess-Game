@@ -40,7 +40,8 @@ export default defineComponent({
         userSelectNone
       },
       draggingStyle: {
-        cursor: 'grabbing'
+        cursor: 'grabbing',
+        zIndex: 10000000000
       }
     }
   },

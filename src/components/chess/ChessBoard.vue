@@ -2,6 +2,8 @@
 import ChessBoardSpace from './ChessBoardSpace.vue'
 import { defineComponent } from 'vue'
 import { getWhiteBoard, getBlackBoard, getInitialPosition } from '../../helpers/GenerateChessBoard'
+import type { BoardSpace } from '../../helpers/GenerateChessBoard'
+import { getMovableSpaces } from '../../helpers/FindMoves'
 
 export default defineComponent({
   props: ['socket', 'roomKey', 'playerColor'],
@@ -9,13 +11,21 @@ export default defineComponent({
     return {
       focusedPiece: -1,
       spaces: this.playerColor === 'w' ? getWhiteBoard() : getBlackBoard(),
-      pieces: getInitialPosition()
+      pieces: getInitialPosition(),
+      movableSpaces: [] as BoardSpace[],
+      playersTurn: false
     }
   },
   methods: {
     setFocusedPiece(focusPiece: string, focusSpace: string) {
       for (let i = 0; i < this.pieces.length; i++) {
         if (this.pieces[i].piece === focusPiece && this.pieces[i].spaceName === focusSpace) {
+          if (
+            (this.pieces[i].piece.includes('black') && this.playerColor !== 'b') ||
+            (this.pieces[i].piece.includes('white') && this.playerColor !== 'w')
+          ) {
+            return
+          }
           this.focusedPiece = i
         }
       }
@@ -24,6 +34,9 @@ export default defineComponent({
       this.focusedPiece = -1
     },
     movePiece(spaceName: string) {
+      if (!this.playersTurn) {
+        return
+      }
       this.socket.emit(
         'piece-moved',
         this.pieces[this.focusedPiece].piece,
@@ -31,17 +44,29 @@ export default defineComponent({
         spaceName,
         this.roomKey
       )
-      for (let space of this.spaces) {
+      this.pieces[this.focusedPiece].spaceName = spaceName
+      for (let i = 0; i < this.pieces.length; i++) {
         if (
-          space.file === this.pieces[this.focusedPiece].spaceName.charAt(0) &&
-          space.rank === this.pieces[this.focusedPiece].spaceName.charAt(1)
+          this.pieces[i].spaceName === spaceName &&
+          this.pieces[i].piece.charAt(0) !== this.playerColor
         ) {
-          this.pieces[this.focusedPiece].spaceName = spaceName
+          this.pieces.splice(i, 1)
+          break
         }
       }
+      this.playersTurn = false
       this.setUnfocused()
     },
     updateOpponentMove(oldSpace: string, newSpace: string) {
+      for (let i = 0; i < this.pieces.length; i++) {
+        if (
+          this.pieces[i].spaceName.charAt(0) === newSpace.charAt(0) &&
+          this.pieces[i].spaceName.charAt(1) === newSpace.charAt(1)
+        ) {
+          this.pieces.splice(i, 1)
+          break
+        }
+      }
       for (let piece of this.pieces) {
         if (
           piece.spaceName.charAt(0) === oldSpace.charAt(0) &&
@@ -50,49 +75,20 @@ export default defineComponent({
           piece.spaceName = newSpace
         }
       }
+      this.playersTurn = true
     },
-    getPossibleMoves() {},
-    getSpaceMovable(id: string) {
+    updateMovableSpaces() {
       if (this.focusedPiece === -1) {
-        return false
+        this.movableSpaces = []
+        return
       }
-      switch (this.pieces[this.focusedPiece].piece) {
-        case 'whitePawn':
-          if (this.pieces[this.focusedPiece].spaceName.charAt(1) === '2') {
-            if (
-              id.charAt(0) === this.pieces[this.focusedPiece].spaceName.charAt(0) &&
-              parseInt(id.charAt(1)) ===
-                parseInt(this.pieces[this.focusedPiece].spaceName.charAt(1)) + 2
-            ) {
-              return true
-            }
-          }
-          if (
-            id.charAt(0) === this.pieces[this.focusedPiece].spaceName.charAt(0) &&
-            parseInt(id.charAt(1)) ===
-              parseInt(this.pieces[this.focusedPiece].spaceName.charAt(1)) + 1
-          ) {
-            return true
-          }
-          break
-        case 'blackPawn':
-          if (this.pieces[this.focusedPiece].spaceName.charAt(1) === '7') {
-            if (
-              id.charAt(0) === this.pieces[this.focusedPiece].spaceName.charAt(0) &&
-              parseInt(id.charAt(1)) ===
-                parseInt(this.pieces[this.focusedPiece].spaceName.charAt(1)) - 2
-            ) {
-              return true
-            }
-          }
-          if (
-            id.charAt(0) === this.pieces[this.focusedPiece].spaceName.charAt(0) &&
-            parseInt(id.charAt(1)) ===
-              parseInt(this.pieces[this.focusedPiece].spaceName.charAt(1)) - 1
-          ) {
-            return true
-          }
-          break
+      this.movableSpaces = getMovableSpaces(this.pieces[this.focusedPiece], this.pieces)
+    },
+    getSpaceMovable(file: string, rank: string) {
+      if (
+        this.movableSpaces.filter((space) => space.file === file && space.rank === rank).length > 0
+      ) {
+        return true
       }
       return false
     },
@@ -114,17 +110,19 @@ export default defineComponent({
   },
   watch: {
     socket() {
-      this.logMessage('The things shouold be updated...')
       if (this.socket === undefined) {
         return
       }
       this.socket.on('opponent-moved', (piece: string, oldSpace: string, newSpace: string) => {
-        this.logMessage(`Opponent moved ${piece} from ${oldSpace} to ${newSpace}`)
         this.updateOpponentMove(oldSpace, newSpace)
       })
+      this.playersTurn = this.playerColor === 'w' ? true : false
     },
     playerColor() {
       this.spaces = this.playerColor === 'w' ? getWhiteBoard() : getBlackBoard()
+    },
+    focusedPiece() {
+      this.updateMovableSpaces()
     }
   }
 })
@@ -138,7 +136,7 @@ export default defineComponent({
         :key="space.file + space.rank"
         :piece="getSpacePiece(space.file + space.rank)"
         :spaceName="space.file + space.rank"
-        :isMovable="getSpaceMovable(space.file + space.rank)"
+        :isMovable="getSpaceMovable(space.file, space.rank)"
         :isFocused="
           focusedPiece !== -1
             ? pieces[focusedPiece].spaceName === space.file + space.rank + ''
@@ -163,7 +161,6 @@ export default defineComponent({
 .chess-board-grid {
   width: 100%;
   height: 100%;
-  background-color: purple;
   display: grid;
   grid-template-columns: 12.5% 12.5% 12.5% 12.5% 12.5% 12.5% 12.5% 12.5%;
   gap: 0;
@@ -171,9 +168,9 @@ export default defineComponent({
 
 @media only screen and (min-width: 700px) {
   .chess-board-container {
-    max-width: 80vh;
-    height: calc(90vh - max(55px, 6.5vh) - 32px);
-    max-height: 80vh;
+    max-width: min(80vh, 100%);
+    height: min(80vh, 100vw);
+    max-height: calc(90vh - max(55px, 6.5vh) - 32px);
   }
 }
 </style>

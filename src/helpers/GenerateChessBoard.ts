@@ -1,17 +1,17 @@
-interface ChessBoardSpace {
+export interface BoardSpace {
   rank: string
   file: string
 }
 
-interface ChessPiece {
+export interface Piece {
   spaceName: string
   piece: string
 }
 
 const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
 
-export function getWhiteBoard(): ChessBoardSpace[] {
-  const chessBoard: ChessBoardSpace[] = []
+export function getWhiteBoard(): BoardSpace[] {
+  const chessBoard: BoardSpace[] = []
 
   for (let i = 8; i > 0; i--) {
     for (let j = 0; j < files.length; j++) {
@@ -22,8 +22,8 @@ export function getWhiteBoard(): ChessBoardSpace[] {
   return chessBoard
 }
 
-export function getBlackBoard(): ChessBoardSpace[] {
-  const chessBoard: ChessBoardSpace[] = []
+export function getBlackBoard(): BoardSpace[] {
+  const chessBoard: BoardSpace[] = []
 
   for (let i = 1; i < 9; i++) {
     for (let j = files.length - 1; j >= 0; j--) {
@@ -34,7 +34,7 @@ export function getBlackBoard(): ChessBoardSpace[] {
   return chessBoard
 }
 
-export function getInitialPosition(): ChessPiece[] {
+export function getInitialPosition(): Piece[] {
   return [
     { spaceName: 'a1', piece: 'whiteRook' },
     { spaceName: 'b1', piece: 'whiteKnight' },

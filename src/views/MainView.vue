@@ -66,11 +66,14 @@ export default defineComponent({
   }
 
   .playing-area {
-    width: fit-content;
+    width: 100%;
   }
 }
 
-@media only screen and (min-width: 950px) {
+@media only screen and (min-width: 1350px) {
+  .playing-area-container {
+    width: fit-content;
+  }
   .main-view-content-container {
     display: flex;
     flex-direction: row;
