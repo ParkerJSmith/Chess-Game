@@ -2,8 +2,9 @@
 import ChessBoardSpace from './ChessBoardSpace.vue'
 import { defineComponent } from 'vue'
 import { getWhiteBoard, getBlackBoard, getInitialPosition } from '../../helpers/GenerateChessBoard'
-import type { BoardSpace } from '../../helpers/GenerateChessBoard'
-import { getMovableSpaces } from '../../helpers/FindMoves'
+import type { BoardSpace, Piece } from '../../helpers/GenerateChessBoard'
+import { getMovableSpaces, getKing, isKingChecked } from '../../helpers/FindMoves'
+import checkSound from '../../assets/sounds/check_sound.mp3'
 
 export default defineComponent({
   props: ['socket', 'roomKey', 'playerColor'],
@@ -12,8 +13,10 @@ export default defineComponent({
       focusedPiece: -1,
       spaces: this.playerColor === 'w' ? getWhiteBoard() : getBlackBoard(),
       pieces: getInitialPosition(),
+      enPassantPiece: {} as Piece,
       movableSpaces: [] as BoardSpace[],
-      playersTurn: false
+      playersTurn: false,
+      inCheck: false
     }
   },
   methods: {
@@ -44,6 +47,33 @@ export default defineComponent({
         spaceName,
         this.roomKey
       )
+      if (this.enPassantPiece.piece !== undefined) {
+        if (
+          spaceName.charAt(0) === this.enPassantPiece.spaceName.charAt(0) &&
+          Math.abs(
+            parseInt(spaceName.charAt(1)) - parseInt(this.enPassantPiece.spaceName.charAt(1))
+          ) === 1 &&
+          this.pieces[this.focusedPiece].piece.includes('Pawn')
+        ) {
+          for (let i = 0; i < this.pieces.length; i++) {
+            if (this.pieces[i].spaceName === this.enPassantPiece.spaceName) {
+              this.pieces.splice(i, 1)
+              break
+            }
+          }
+        }
+      }
+      this.enPassantPiece = {} as Piece
+      if (
+        this.pieces[this.focusedPiece].piece.includes('Pawn') &&
+        Math.abs(
+          parseInt(spaceName.charAt(1)) -
+            parseInt(this.pieces[this.focusedPiece].spaceName.charAt(1))
+        ) === 2
+      ) {
+        this.logMessage('the en passant piece is the playas now')
+        this.enPassantPiece = this.pieces[this.focusedPiece]
+      }
       this.pieces[this.focusedPiece].spaceName = spaceName
       for (let i = 0; i < this.pieces.length; i++) {
         if (
@@ -58,11 +88,28 @@ export default defineComponent({
       this.setUnfocused()
     },
     updateOpponentMove(oldSpace: string, newSpace: string) {
+      this.logMessage(this.enPassantPiece.piece)
       for (let i = 0; i < this.pieces.length; i++) {
         if (
           this.pieces[i].spaceName.charAt(0) === newSpace.charAt(0) &&
           this.pieces[i].spaceName.charAt(1) === newSpace.charAt(1)
         ) {
+          if (this.enPassantPiece.piece !== undefined) {
+            if (
+              newSpace.charAt(0) === this.enPassantPiece.spaceName.charAt(0) &&
+              Math.abs(
+                parseInt(newSpace.charAt(1)) - parseInt(this.enPassantPiece.spaceName.charAt(1))
+              ) === 1 &&
+              this.pieces[i].piece.includes('Pawn')
+            ) {
+              for (let j = 0; j < this.pieces.length; j++) {
+                if (this.pieces[j].spaceName === this.enPassantPiece.spaceName) {
+                  this.pieces.splice(j, 1)
+                  break
+                }
+              }
+            }
+          }
           this.pieces.splice(i, 1)
           break
         }
@@ -72,8 +119,21 @@ export default defineComponent({
           piece.spaceName.charAt(0) === oldSpace.charAt(0) &&
           piece.spaceName.charAt(1) === oldSpace.charAt(1)
         ) {
+          this.enPassantPiece = {} as Piece
+          if (
+            piece.piece.includes('Pawn') &&
+            Math.abs(parseInt(newSpace.charAt(1)) - parseInt(oldSpace.charAt(1))) === 2
+          ) {
+            this.logMessage('EN PASSANT DETECTED!')
+            this.enPassantPiece = piece
+          }
           piece.spaceName = newSpace
         }
+      }
+      const color = this.playerColor === 'w' ? 'white' : 'black'
+      if (isKingChecked(getKing(this.pieces, color)!, this.pieces, this.enPassantPiece)) {
+        let audio = new Audio(checkSound)
+        audio.play()
       }
       this.playersTurn = true
     },
@@ -82,7 +142,11 @@ export default defineComponent({
         this.movableSpaces = []
         return
       }
-      this.movableSpaces = getMovableSpaces(this.pieces[this.focusedPiece], this.pieces)
+      this.movableSpaces = getMovableSpaces(
+        this.pieces[this.focusedPiece],
+        this.pieces,
+        this.enPassantPiece
+      )
     },
     getSpaceMovable(file: string, rank: string) {
       if (

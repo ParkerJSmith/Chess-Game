@@ -22,21 +22,53 @@ const fileNumbers = new Map([
   [8, 'h']
 ])
 
-export function getMovableSpaces(piece: Piece, piecesList: Piece[]): BoardSpace[] {
+export function getMovableSpaces(
+  piece: Piece,
+  piecesList: Piece[],
+  enPassantPiece: Piece
+): BoardSpace[] {
   const pieceType = piece.piece.replace('white', '').replace('black', '')
   switch (pieceType) {
     case 'Pawn':
-      return getPawnMoves(piece, piecesList)
+      return getPawnMoves(piece, piecesList, enPassantPiece)
     case 'Knight':
-      return getKnightMoves(piece, piecesList)
+      return getKnightMoves(piece, piecesList, true, enPassantPiece)
     case 'Bishop':
-      return getBishopMoves(piece, piecesList)
+      return getBishopMoves(piece, piecesList, true, enPassantPiece)
     case 'Rook':
-      return getRookMoves(piece, piecesList)
+      return getRookMoves(piece, piecesList, true, enPassantPiece)
     case 'Queen':
-      return getBishopMoves(piece, piecesList).concat(getRookMoves(piece, piecesList))
+      return getBishopMoves(piece, piecesList, true, enPassantPiece).concat(
+        getRookMoves(piece, piecesList, true, enPassantPiece)
+      )
     case 'King':
-      return getKingMoves(piece, piecesList)
+      return getKingMoves(piece, piecesList, enPassantPiece)
+  }
+
+  return []
+}
+
+function getMovableSpacesNoCheckTest(
+  piece: Piece,
+  piecesList: Piece[],
+  enPassantPiece: Piece
+): BoardSpace[] {
+  const pieceType = piece.piece.replace('white', '').replace('black', '')
+  switch (pieceType) {
+    case 'Pawn':
+      return getPawnMoves(piece, piecesList, enPassantPiece)
+    case 'Knight':
+      return getKnightMoves(piece, piecesList, false, enPassantPiece)
+    case 'Bishop':
+      return getBishopMoves(piece, piecesList, false, enPassantPiece)
+    case 'Rook':
+      return getRookMoves(piece, piecesList, false, enPassantPiece)
+    case 'Queen':
+      return getBishopMoves(piece, piecesList, false, enPassantPiece).concat(
+        getRookMoves(piece, piecesList, false, enPassantPiece)
+      )
+    case 'King':
+      return getKingMoves(piece, piecesList, enPassantPiece)
   }
 
   return []
@@ -54,13 +86,75 @@ function findPieceOnSpace(file: string, rank: number, piecesList: Piece[]): stri
   return ''
 }
 
-function getPawnMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] {
+function getPiecesAfterMove(oldSpace: BoardSpace, newSpace: BoardSpace, piecesList: Piece[]) {
+  const returnArray = []
+  for (const piece of piecesList) {
+    returnArray.push({ spaceName: piece.spaceName, piece: piece.piece })
+  }
+  for (let i = 0; i < returnArray.length; i++) {
+    if (
+      returnArray[i].spaceName.charAt(0) === newSpace.file &&
+      returnArray[i].spaceName.charAt(1) === newSpace.rank
+    ) {
+      returnArray.splice(i, 1)
+      break
+    }
+  }
+  for (const boardPiece of returnArray) {
+    if (
+      boardPiece.spaceName.charAt(0) === oldSpace.file &&
+      boardPiece.spaceName.charAt(1) === oldSpace.rank
+    ) {
+      boardPiece.spaceName = newSpace.file + newSpace.rank
+    }
+  }
+  return returnArray
+}
+
+export function getKing(piecesList: Piece[], color: string) {
+  for (const piece of piecesList) {
+    if (piece.piece === color + 'King') {
+      return piece
+    }
+  }
+}
+
+function checkMovesKingNotInCheck(
+  movableSpaces: BoardSpace[],
+  piece: Piece,
+  piecesList: Piece[],
+  enPassantPiece: Piece
+) {
+  const color = piece.piece.includes('white') ? 'white' : 'black'
+  for (let i = 0; i < movableSpaces.length; i++) {
+    if (
+      isKingChecked(
+        getKing(piecesList, color)!,
+        getPiecesAfterMove(
+          { rank: piece.spaceName.charAt(1), file: piece.spaceName.charAt(0) },
+          { rank: movableSpaces[i].rank, file: movableSpaces[i].file },
+          piecesList
+        ),
+        enPassantPiece
+      )
+    ) {
+      movableSpaces.splice(i, 1)
+      i--
+    }
+  }
+}
+
+function getPawnMoves(piece: Piece, piecesList: Piece[], enPassantPiece: Piece): BoardSpace[] {
   const movableSpaces: BoardSpace[] = []
   const file = piece.spaceName.charAt(0)
   const rank = parseInt(piece.spaceName.charAt(1))
   const oppositeColor = piece.piece.includes('white') ? 'black' : 'white'
   const direction = piece.piece.includes('white') ? 1 : -1
   const startRank = piece.piece.includes('white') ? 2 : 7
+  const enPassantFile =
+    enPassantPiece.piece !== undefined ? enPassantPiece.spaceName.charAt(0) : undefined
+  const enPassantRank =
+    enPassantPiece.piece !== undefined ? parseInt(enPassantPiece.spaceName.charAt(1)) : undefined
   // Move 2 spaces
   if (parseInt(piece.spaceName.charAt(1)) === startRank) {
     if (
@@ -85,6 +179,7 @@ function getPawnMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] {
       file: fileNumbers.get(files.get(file)! - 1)!
     })
   }
+
   // Take right
   if (
     findPieceOnSpace(fileNumbers.get(files.get(file)! + 1)!, rank + 1 * direction, piecesList) ===
@@ -95,6 +190,21 @@ function getPawnMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] {
       file: fileNumbers.get(files.get(file)! + 1)!
     })
   }
+
+  // En passant
+  if (
+    enPassantFile !== undefined &&
+    (fileNumbers.get(files.get(file)! + 1)! === enPassantFile ||
+      fileNumbers.get(files.get(file)! - 1)! === enPassantFile) &&
+    rank === enPassantRank!
+  ) {
+    movableSpaces.push({
+      rank: (rank + 1 * direction).toString(),
+      file: fileNumbers.get(files.get(file)! + (files.get(enPassantFile)! - files.get(file)!))!
+    })
+  }
+
+  checkMovesKingNotInCheck(movableSpaces, piece, piecesList, enPassantPiece)
 
   return movableSpaces
 }
@@ -130,7 +240,12 @@ function getPawnTakes(piece: Piece, piecesList: Piece[]): BoardSpace[] {
   return movableSpaces
 }
 
-function getKnightMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] {
+function getKnightMoves(
+  piece: Piece,
+  piecesList: Piece[],
+  testingCheck: boolean,
+  enPassantPiece: Piece
+): BoardSpace[] {
   const movableSpaces: BoardSpace[] = []
   const file = piece.spaceName.charAt(0)
   const rank = parseInt(piece.spaceName.charAt(1))
@@ -207,10 +322,19 @@ function getKnightMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] {
       })
     }
   }
+  if (testingCheck) {
+    checkMovesKingNotInCheck(movableSpaces, piece, piecesList, enPassantPiece)
+  }
+
   return movableSpaces
 }
 
-function getBishopMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] {
+function getBishopMoves(
+  piece: Piece,
+  piecesList: Piece[],
+  testingCheck: boolean,
+  enPassantPiece: Piece
+): BoardSpace[] {
   const movableSpaces: BoardSpace[] = []
   const file = piece.spaceName.charAt(0)
   const rank = parseInt(piece.spaceName.charAt(1))
@@ -292,10 +416,19 @@ function getBishopMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] {
     currentRank--
     currentFile = fileNumbers.get(files.get(currentFile)! + 1)!
   }
+  if (testingCheck) {
+    checkMovesKingNotInCheck(movableSpaces, piece, piecesList, enPassantPiece)
+  }
+
   return movableSpaces
 }
 
-function getRookMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] {
+function getRookMoves(
+  piece: Piece,
+  piecesList: Piece[],
+  testingCheck: boolean,
+  enPassantPiece: Piece
+): BoardSpace[] {
   const movableSpaces: BoardSpace[] = []
   const file = piece.spaceName.charAt(0)
   const rank = parseInt(piece.spaceName.charAt(1))
@@ -377,11 +510,14 @@ function getRookMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] {
     }
     currentFile = fileNumbers.get(files.get(currentFile)! + 1)!
   }
+  if (testingCheck) {
+    checkMovesKingNotInCheck(movableSpaces, piece, piecesList, enPassantPiece)
+  }
 
   return movableSpaces
 }
 
-function getKingMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] {
+function getKingMoves(piece: Piece, piecesList: Piece[], enPassantPiece: Piece): BoardSpace[] {
   let movableSpaces: BoardSpace[] = []
   const file = piece.spaceName.charAt(0)
   const rank = parseInt(piece.spaceName.charAt(1))
@@ -471,7 +607,7 @@ function getKingMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] {
       continue
     }
     if (boardPiece.piece.includes(oppositeColor)) {
-      illegalSpaces = illegalSpaces.concat(getMovableSpaces(boardPiece, piecesList))
+      illegalSpaces = illegalSpaces.concat(getMovableSpaces(boardPiece, piecesList, enPassantPiece))
     }
   }
 
@@ -562,4 +698,35 @@ function getUncheckedKingMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] 
     })
   }
   return movableSpaces
+}
+
+export function isKingChecked(king: Piece, piecesList: Piece[], enPassantPiece: Piece): boolean {
+  const file = king.spaceName.charAt(0)
+  const rank = king.spaceName.charAt(1)
+  const oppositeColor = king.piece.includes('white') ? 'black' : 'white'
+  let illegalSpaces: BoardSpace[] = []
+
+  for (const boardPiece of piecesList) {
+    if (boardPiece.piece === oppositeColor + 'Pawn') {
+      illegalSpaces = illegalSpaces.concat(getPawnTakes(boardPiece, piecesList))
+      continue
+    }
+    if (boardPiece.piece === oppositeColor + 'King') {
+      illegalSpaces = illegalSpaces.concat(getUncheckedKingMoves(boardPiece, piecesList))
+      continue
+    }
+    if (boardPiece.piece.includes(oppositeColor)) {
+      illegalSpaces = illegalSpaces.concat(
+        getMovableSpacesNoCheckTest(boardPiece, piecesList, enPassantPiece)
+      )
+    }
+  }
+
+  for (const space of illegalSpaces) {
+    if (file === space.file && rank === space.rank) {
+      return true
+    }
+  }
+
+  return false
 }
