@@ -144,6 +144,31 @@ function checkMovesKingNotInCheck(
   }
 }
 
+function checkPieceDefended(piece: Piece, piecesList: Piece[]) {
+  let spaces: BoardSpace[] = []
+  const testList: Piece[] = []
+  const file = piece.spaceName.charAt(0)
+  const rank = piece.spaceName.charAt(1)
+
+  for (const boardPiece of piecesList) {
+    if (
+      boardPiece.piece.includes('white') === piece.piece.includes('white') &&
+      boardPiece.spaceName !== piece.spaceName
+    ) {
+      testList.push(boardPiece)
+    }
+  }
+  for (const boardPiece of testList) {
+    spaces = spaces.concat(getMovableSpaces(boardPiece, testList, { piece: '', spaceName: '' }))
+  }
+  for (const space of spaces) {
+    if (space.rank === rank && space.file === file) {
+      return true
+    }
+  }
+  return false
+}
+
 function getPawnMoves(piece: Piece, piecesList: Piece[], enPassantPiece: Piece): BoardSpace[] {
   const movableSpaces: BoardSpace[] = []
   const file = piece.spaceName.charAt(0)
@@ -209,28 +234,21 @@ function getPawnMoves(piece: Piece, piecesList: Piece[], enPassantPiece: Piece):
   return movableSpaces
 }
 
-function getPawnTakes(piece: Piece, piecesList: Piece[]): BoardSpace[] {
+function getPawnTakes(piece: Piece): BoardSpace[] {
   const movableSpaces: BoardSpace[] = []
   const file = piece.spaceName.charAt(0)
   const rank = parseInt(piece.spaceName.charAt(1))
-  const color = piece.piece.includes('white') ? 'white' : 'black'
   const direction = piece.piece.includes('white') ? 1 : -1
 
   // Take left
-  if (
-    findPieceOnSpace(fileNumbers.get(files.get(file)! - 1)!, rank + 1 * direction, piecesList) !==
-    color
-  ) {
+  if (fileNumbers.get(files.get(file)! - 1) !== undefined) {
     movableSpaces.push({
       rank: (rank + 1 * direction).toString(),
       file: fileNumbers.get(files.get(file)! - 1)!
     })
   }
   // Take right
-  if (
-    findPieceOnSpace(fileNumbers.get(files.get(file)! + 1)!, rank + 1 * direction, piecesList) !==
-    color
-  ) {
+  if (fileNumbers.get(files.get(file)! + 1) !== undefined) {
     movableSpaces.push({
       rank: (rank + 1 * direction).toString(),
       file: fileNumbers.get(files.get(file)! + 1)!
@@ -523,6 +541,13 @@ function getKingMoves(piece: Piece, piecesList: Piece[], enPassantPiece: Piece):
   const rank = parseInt(piece.spaceName.charAt(1))
   const color = piece.piece.includes('white') ? 'white' : 'black'
   const oppositeColor = piece.piece.includes('white') ? 'black' : 'white'
+  const piecesExcludingKing: Piece[] = []
+
+  for (const boardPiece of piecesList) {
+    if (boardPiece.piece !== color + 'King') {
+      piecesExcludingKing.push(boardPiece)
+    }
+  }
 
   // Top left
   if (
@@ -599,7 +624,7 @@ function getKingMoves(piece: Piece, piecesList: Piece[], enPassantPiece: Piece):
   let illegalSpaces: BoardSpace[] = []
   for (const boardPiece of piecesList) {
     if (boardPiece.piece === oppositeColor + 'Pawn') {
-      illegalSpaces = illegalSpaces.concat(getPawnTakes(boardPiece, piecesList))
+      illegalSpaces = illegalSpaces.concat(getPawnTakes(boardPiece))
       continue
     }
     if (boardPiece.piece === oppositeColor + 'King') {
@@ -607,7 +632,15 @@ function getKingMoves(piece: Piece, piecesList: Piece[], enPassantPiece: Piece):
       continue
     }
     if (boardPiece.piece.includes(oppositeColor)) {
-      illegalSpaces = illegalSpaces.concat(getMovableSpaces(boardPiece, piecesList, enPassantPiece))
+      illegalSpaces = illegalSpaces.concat(
+        getMovableSpaces(boardPiece, piecesExcludingKing, enPassantPiece)
+      )
+      if (checkPieceDefended(boardPiece, piecesList)) {
+        illegalSpaces.push({
+          rank: boardPiece.spaceName.charAt(1),
+          file: boardPiece.spaceName.charAt(0)
+        })
+      }
     }
   }
 
@@ -701,6 +734,9 @@ function getUncheckedKingMoves(piece: Piece, piecesList: Piece[]): BoardSpace[] 
 }
 
 export function isKingChecked(king: Piece, piecesList: Piece[], enPassantPiece: Piece): boolean {
+  if (king === undefined) {
+    return false
+  }
   const file = king.spaceName.charAt(0)
   const rank = king.spaceName.charAt(1)
   const oppositeColor = king.piece.includes('white') ? 'black' : 'white'
@@ -708,7 +744,7 @@ export function isKingChecked(king: Piece, piecesList: Piece[], enPassantPiece: 
 
   for (const boardPiece of piecesList) {
     if (boardPiece.piece === oppositeColor + 'Pawn') {
-      illegalSpaces = illegalSpaces.concat(getPawnTakes(boardPiece, piecesList))
+      illegalSpaces = illegalSpaces.concat(getPawnTakes(boardPiece))
       continue
     }
     if (boardPiece.piece === oppositeColor + 'King') {
@@ -726,6 +762,22 @@ export function isKingChecked(king: Piece, piecesList: Piece[], enPassantPiece: 
     if (file === space.file && rank === space.rank) {
       return true
     }
+  }
+
+  return false
+}
+
+export function isCheckmated(king: Piece, piecesList: Piece[], enPassantPiece: Piece): boolean {
+  let legalMoves: BoardSpace[] = []
+
+  for (const boardPiece of piecesList) {
+    if (boardPiece.piece.includes('white') === king.piece.includes('white')) {
+      legalMoves = legalMoves.concat(getMovableSpaces(boardPiece, piecesList, enPassantPiece))
+    }
+  }
+
+  if (legalMoves.length === 0) {
+    return true
   }
 
   return false

@@ -3,8 +3,14 @@ import ChessBoardSpace from './ChessBoardSpace.vue'
 import { defineComponent } from 'vue'
 import { getWhiteBoard, getBlackBoard, getInitialPosition } from '../../helpers/GenerateChessBoard'
 import type { BoardSpace, Piece } from '../../helpers/GenerateChessBoard'
-import { getMovableSpaces, getKing, isKingChecked } from '../../helpers/FindMoves'
+import { getMovableSpaces, getKing, isKingChecked, isCheckmated } from '../../helpers/FindMoves'
 import checkSound from '../../assets/sounds/check_sound.mp3'
+import loseSound from '../../assets/sounds/lose_sound.mp3'
+
+export interface Move {
+  oldPosition: Piece
+  newPosition: Piece
+}
 
 export default defineComponent({
   props: ['socket', 'roomKey', 'playerColor'],
@@ -40,102 +46,111 @@ export default defineComponent({
       if (!this.playersTurn) {
         return
       }
-      this.socket.emit(
-        'piece-moved',
-        this.pieces[this.focusedPiece].piece,
-        this.pieces[this.focusedPiece].spaceName,
-        spaceName,
-        this.roomKey
-      )
-      if (this.enPassantPiece.piece !== undefined) {
-        if (
-          spaceName.charAt(0) === this.enPassantPiece.spaceName.charAt(0) &&
-          Math.abs(
-            parseInt(spaceName.charAt(1)) - parseInt(this.enPassantPiece.spaceName.charAt(1))
-          ) === 1 &&
-          this.pieces[this.focusedPiece].piece.includes('Pawn')
-        ) {
-          for (let i = 0; i < this.pieces.length; i++) {
-            if (this.pieces[i].spaceName === this.enPassantPiece.spaceName) {
-              this.pieces.splice(i, 1)
-              break
-            }
-          }
-        }
+
+      const movingPiece = this.pieces[this.focusedPiece]
+      const movedList: Move[] = []
+
+      movedList.push({
+        oldPosition: {
+          piece: this.pieces[this.focusedPiece].piece,
+          spaceName: this.pieces[this.focusedPiece].spaceName
+        },
+        newPosition: { piece: this.pieces[this.focusedPiece].piece, spaceName: spaceName }
+      })
+
+      const takenPiece = this.getPieceAtSpace(spaceName)
+      if (takenPiece !== null) {
+        movedList.push({ oldPosition: takenPiece, newPosition: { piece: '', spaceName: '' } })
+        this.removePiece(takenPiece)
       }
-      this.enPassantPiece = {} as Piece
-      if (
-        this.pieces[this.focusedPiece].piece.includes('Pawn') &&
-        Math.abs(
-          parseInt(spaceName.charAt(1)) -
-            parseInt(this.pieces[this.focusedPiece].spaceName.charAt(1))
-        ) === 2
-      ) {
-        this.logMessage('the en passant piece is the playas now')
-        this.enPassantPiece = this.pieces[this.focusedPiece]
+      const takenEnPassant = this.checkEnPassantTaken({
+        piece: this.pieces[this.focusedPiece].piece,
+        spaceName: spaceName
+      })
+      if (takenEnPassant !== null) {
+        movedList.push({ oldPosition: takenEnPassant!, newPosition: { piece: '', spaceName: '' } })
+        this.removePiece(takenEnPassant!)
       }
-      this.pieces[this.focusedPiece].spaceName = spaceName
-      for (let i = 0; i < this.pieces.length; i++) {
-        if (
-          this.pieces[i].spaceName === spaceName &&
-          this.pieces[i].piece.charAt(0) !== this.playerColor
-        ) {
-          this.pieces.splice(i, 1)
-          break
-        }
-      }
+      movingPiece.spaceName = spaceName
+
+      this.socket.emit('piece-moved', movedList, this.roomKey)
+
       this.playersTurn = false
       this.setUnfocused()
     },
-    updateOpponentMove(oldSpace: string, newSpace: string) {
-      this.logMessage(this.enPassantPiece.piece)
-      for (let i = 0; i < this.pieces.length; i++) {
-        if (
-          this.pieces[i].spaceName.charAt(0) === newSpace.charAt(0) &&
-          this.pieces[i].spaceName.charAt(1) === newSpace.charAt(1)
-        ) {
-          if (this.enPassantPiece.piece !== undefined) {
-            if (
-              newSpace.charAt(0) === this.enPassantPiece.spaceName.charAt(0) &&
-              Math.abs(
-                parseInt(newSpace.charAt(1)) - parseInt(this.enPassantPiece.spaceName.charAt(1))
-              ) === 1 &&
-              this.pieces[i].piece.includes('Pawn')
-            ) {
-              for (let j = 0; j < this.pieces.length; j++) {
-                if (this.pieces[j].spaceName === this.enPassantPiece.spaceName) {
-                  this.pieces.splice(j, 1)
-                  break
-                }
-              }
-            }
-          }
-          this.pieces.splice(i, 1)
-          break
+    updateOpponentMove(movedPieces: Move[]) {
+      for (const move of movedPieces) {
+        if (move.newPosition.piece === '') {
+          this.removePiece(move.oldPosition)
+        } else {
+          this.removePiece(move.oldPosition)
+          this.pieces.push(move.newPosition)
         }
+        this.checkEnPassant(move)
       }
-      for (let piece of this.pieces) {
-        if (
-          piece.spaceName.charAt(0) === oldSpace.charAt(0) &&
-          piece.spaceName.charAt(1) === oldSpace.charAt(1)
-        ) {
-          this.enPassantPiece = {} as Piece
-          if (
-            piece.piece.includes('Pawn') &&
-            Math.abs(parseInt(newSpace.charAt(1)) - parseInt(oldSpace.charAt(1))) === 2
-          ) {
-            this.logMessage('EN PASSANT DETECTED!')
-            this.enPassantPiece = piece
-          }
-          piece.spaceName = newSpace
-        }
-      }
+
       const color = this.playerColor === 'w' ? 'white' : 'black'
-      if (isKingChecked(getKing(this.pieces, color)!, this.pieces, this.enPassantPiece)) {
+      const king = getKing(this.pieces, color)!
+      if (isKingChecked(king, this.pieces, this.enPassantPiece)) {
+        if (isCheckmated(king, this.pieces, this.enPassantPiece)) {
+          this.playersTurn = false
+          let audio = new Audio(loseSound)
+          audio.play()
+          return
+        }
         let audio = new Audio(checkSound)
         audio.play()
       }
       this.playersTurn = true
+    },
+    removePiece(piece: Piece) {
+      for (let i = 0; i < this.pieces.length; i++) {
+        if (this.pieces[i].spaceName === piece.spaceName && this.pieces[i].piece === piece.piece) {
+          this.pieces.splice(i, 1)
+        }
+      }
+    },
+    removePieceAtSpace(spaceName: string) {
+      for (let i = 0; i < this.pieces.length; i++) {
+        if (this.pieces[i].spaceName === spaceName) {
+          this.pieces.splice(i, 1)
+        }
+      }
+    },
+    getPieceAtSpace(spaceName: string) {
+      for (let i = 0; i < this.pieces.length; i++) {
+        if (this.pieces[i].spaceName === spaceName) {
+          return this.pieces[i]
+        }
+      }
+      return null
+    },
+    checkEnPassant(move: Move) {
+      if (!move.oldPosition.piece.includes('Pawn')) {
+        return
+      }
+      if (
+        Math.abs(
+          parseInt(move.oldPosition.spaceName.charAt(1)) -
+            parseInt(move.newPosition.spaceName.charAt(1))
+        ) === 2
+      ) {
+        this.enPassantPiece = move.newPosition
+      }
+    },
+    checkEnPassantTaken(piece: Piece) {
+      const direction = this.playerColor === 'w' ? 1 : -1
+      if (!piece.piece.includes('Pawn') || this.enPassantPiece.piece === undefined) {
+        return null
+      }
+      if (
+        parseInt(piece.spaceName.charAt(1)) ===
+          parseInt(this.enPassantPiece.spaceName.charAt(1)) + 1 * direction &&
+        piece.spaceName.charAt(0) === this.enPassantPiece.spaceName.charAt(0)
+      ) {
+        return this.enPassantPiece
+      }
+      return null
     },
     updateMovableSpaces() {
       if (this.focusedPiece === -1) {
@@ -177,8 +192,8 @@ export default defineComponent({
       if (this.socket === undefined) {
         return
       }
-      this.socket.on('opponent-moved', (piece: string, oldSpace: string, newSpace: string) => {
-        this.updateOpponentMove(oldSpace, newSpace)
+      this.socket.on('opponent-moved', (movedPieces: Move[]) => {
+        this.updateOpponentMove(movedPieces)
       })
       this.playersTurn = this.playerColor === 'w' ? true : false
     },
